@@ -77,30 +77,40 @@ class SignLanguageConsumer(WebsocketConsumer):
             np_arr = np.frombuffer(img_bytes, np.uint8)
             frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
 
-            # 2. Extract Keypoints
+            # 2. Run MediaPipe Detection
             image, results = mediapipe_detection(frame, self.holistic)
-            keypoints = extract_keypoints(results)
             
-            # 3. Prediction Logic
-            self.sequence.append(keypoints)
-            self.sequence = self.sequence[-30:]
-            
-            if len(self.sequence) == 30:
-                # Add the axis and predict!
-                res = model.predict(np.expand_dims(self.sequence, axis=0))[0]
-                predicted_word = actions[np.argmax(res)]
-                confidence = float(res[np.argmax(res)])
+            # --- THE HAND GATE ---
+            if results.left_hand_landmarks or results.right_hand_landmarks:
                 
-                # Using the tutorial's stability check:
-                self.predictions.append(np.argmax(res))
-                if np.unique(self.predictions[-10:])[0] == np.argmax(res):
-                    if confidence > 0.5:
-                        # SHOOT THE TRANSLATED WORD BACK TO NEXTJS!
-                        self.send(text_data=json.dumps({
-                            'prediction': predicted_word
-                        }))
-                        
-                        # THE CRITICAL FIX: Wipe the memory!
-                        # This gives the server a cooldown so it doesn't crash.
-                        self.sequence = []
-                        self.predictions = []
+                # Extract keypoints ONLY if hands are present
+                keypoints = extract_keypoints(results)
+                
+                # 3. Prediction Logic
+                self.sequence.append(keypoints)
+                self.sequence = self.sequence[-30:]
+                
+                if len(self.sequence) == 30:
+                    # Add the axis and predict!
+                    res = model.predict(np.expand_dims(self.sequence, axis=0))[0]
+                    predicted_word = actions[np.argmax(res)]
+                    confidence = float(res[np.argmax(res)])
+                    
+                    # Using the tutorial's stability check:
+                    self.predictions.append(np.argmax(res))
+                    if np.unique(self.predictions[-10:])[0] == np.argmax(res):
+                        if confidence > 0.5:
+                            # SHOOT THE TRANSLATED WORD BACK TO NEXTJS!
+                            self.send(text_data=json.dumps({
+                                'prediction': predicted_word
+                            }))
+                            
+                            # THE CRITICAL FIX: Wipe the memory! after a successful translation!
+                            # This gives the server a cooldown so it doesn't crash.
+                            self.sequence = []
+                            self.predictions = []
+            
+            else:
+                # NO HANDS DETECTED
+                # Wipe the memory so the next sign starts with a clean 30 frames
+                self.sequence = []
