@@ -46,7 +46,7 @@ class SignLanguageConsumer(WebsocketConsumer):
             predicted_word = None
 
             # Route the traffic based on the dropdown!
-            if self.active_model in ['default', 'less_face']:
+            if self.active_model in ['default', 'less_face', 'default_v2', 'less_face_v2']:
                 # Send to engine_lstm.py
                 predicted_word = self.lstm_engine.process_frame(frame, self.active_model)
                 
